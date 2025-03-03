@@ -19,14 +19,14 @@ import (
 )
 
 var (
-	buttons        = make(map[string]*widget.Button) // словарь кнопок (цифры 0-9)
-	highlightedKey string // клавиша, которую надо нажать
-	startTime      time.Time // время начала реакции
-	attempts       int  // количество попыток (максимум 10)
-	currentLevel   int = 1 // уровень сложности
-	testRunning    bool // флаг "идёт тест"
-	results        []float64 // список времен реакции
-	graphImage     *canvas.Image // график реакции
+	buttons        = make(map[string]*widget.Button)     // словарь кнопок (цифры 0-9)
+	highlightedKey string                                // клавиша, которую надо нажать
+	startTime      time.Time                             // время начала реакции
+	attempts       int                                   // количество попыток (максимум 10)
+	currentLevel   int                               = 1 // уровень сложности
+	testRunning    bool                                  // флаг "идёт тест"
+	results        []float64                             // список времен реакции
+	graphImage     *canvas.Image                         // график реакции
 	speedLevels    = map[int]time.Duration{
 		1: 3000 * time.Millisecond,
 		2: 2500 * time.Millisecond,
@@ -37,7 +37,7 @@ var (
 	numPadEnabled bool // использовать NumPad в сложных уровнях
 )
 
-//выбор случайной клавиши
+// выбор случайной клавиши
 func getNextKey() string {
 	keys := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"}
 
@@ -49,7 +49,7 @@ func getNextKey() string {
 	return keys[rand.Intn(len(keys))]
 }
 
-//для подсветки клавиш
+// для подсветки клавиш
 func highlightRandomKey(label *widget.Label, window fyne.Window) {
 	if !testRunning {
 		return
@@ -73,7 +73,7 @@ func highlightRandomKey(label *widget.Label, window fyne.Window) {
 	window.Canvas().Refresh(label)
 }
 
-//функция обработки нажатия клавиши (клавиатура + кнопки)
+// функция обработки нажатия клавиши (клавиатура + кнопки)
 func keyPressed(input string, label *widget.Label, window fyne.Window) {
 	if !testRunning || input != highlightedKey {
 		return
@@ -108,7 +108,7 @@ func saveResults() {
 	}
 }
 
-//график
+// график
 func drawGraph() {
 	p := plot.New()
 	p.Title.Text = "Время реакции"
@@ -138,7 +138,7 @@ func drawGraph() {
 	graphImage.Refresh()
 }
 
-//для запуска теста
+// для запуска теста
 func startTest(label *widget.Label, window fyne.Window) {
 	testRunning = true
 	attempts = 0
@@ -146,7 +146,7 @@ func startTest(label *widget.Label, window fyne.Window) {
 	highlightRandomKey(label, window)
 }
 
-//функция смены уровня
+// функция смены уровня
 func changeLevel(level int, label *widget.Label, numPadContainer *fyne.Container) {
 	currentLevel = level
 	testRunning = false
@@ -165,7 +165,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	myApp := app.New()
 	myWindow := myApp.NewWindow("Тест скорости реакции")
-	myWindow.Resize(fyne.NewSize(800, 600))
+	myWindow.Resize(fyne.NewSize(800, 700))
 
 	//метка текущей клавиши
 	label := widget.NewLabel("Выберите уровень и нажмите 'Старт'")
@@ -226,7 +226,21 @@ func main() {
 	myWindow.SetContent(content)
 
 	myWindow.Canvas().SetOnTypedKey(func(event *fyne.KeyEvent) {
-		keyPressed(string(event.Name), label, myWindow)
+		key := string(event.Name)
+
+		// Обработка NumPad клавиш
+		numPadMapping := map[string]string{
+			"KP_1": "Num1", "KP_2": "Num2", "KP_3": "Num3",
+			"KP_4": "Num4", "KP_5": "Num5", "KP_6": "Num6",
+			"KP_7": "Num7", "KP_8": "Num8", "KP_9": "Num9",
+			"KP_0": "Num0",
+		}
+
+		if mappedKey, exists := numPadMapping[key]; exists {
+			key = mappedKey
+		}
+
+		keyPressed(key, label, myWindow)
 	})
 
 	myWindow.ShowAndRun()
