@@ -228,18 +228,25 @@ func main() {
 	myWindow.Canvas().SetOnTypedKey(func(event *fyne.KeyEvent) {
 		key := string(event.Name)
 
-		// Обработка NumPad клавиш
+		// Возможные названия клавиш на разных системах
 		numPadMapping := map[string]string{
 			"KP_1": "Num1", "KP_2": "Num2", "KP_3": "Num3",
 			"KP_4": "Num4", "KP_5": "Num5", "KP_6": "Num6",
 			"KP_7": "Num7", "KP_8": "Num8", "KP_9": "Num9",
 			"KP_0": "Num0",
+
+			// Возможные альтернативные названия (зависит от ОС)
+			"KP_End": "Num1", "KP_Down": "Num2", "KP_Next": "Num3",
+			"KP_Left": "Num4", "KP_Begin": "Num5", "KP_Right": "Num6",
+			"KP_Home": "Num7", "KP_Up": "Num8", "KP_Prior": "Num9",
+			"KP_Insert": "Num0",
 		}
 
 		if mappedKey, exists := numPadMapping[key]; exists {
 			key = mappedKey
 		}
 
+		fmt.Println("Key pressed:", key) // Логирование для проверки
 		keyPressed(key, label, myWindow)
 	})
 
