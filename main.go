@@ -18,15 +18,17 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
+var content *fyne.Container
+
 var (
-	buttons        = make(map[string]*widget.Button)     // словарь кнопок (цифры 0-9)
-	highlightedKey string                                // клавиша, которую надо нажать
-	startTime      time.Time                             // время начала реакции
-	attempts       int                                   // количество попыток (максимум 10)
-	currentLevel   int                               = 1 // уровень сложности
-	testRunning    bool                                  // флаг "идёт тест"
-	results        []float64                             // список времен реакции
-	graphImage     *canvas.Image                         // график реакции
+	buttons        = make(map[string]*widget.Button)
+	highlightedKey string
+	startTime      time.Time
+	attempts       int
+	currentLevel   int = 1
+	testRunning    bool
+	results        []float64
+	graphImage     *canvas.Image
 	speedLevels    = map[int]time.Duration{
 		1: 3000 * time.Millisecond,
 		2: 2500 * time.Millisecond,
@@ -34,67 +36,99 @@ var (
 		4: 1500 * time.Millisecond,
 		5: 1000 * time.Millisecond,
 	}
-	numPadEnabled bool // использовать NumPad в сложных уровнях
+	numPadEnabled bool // Флаг включения NumPad
 )
 
-// выбор случайной клавиши
-func getNextKey() string {
-	keys := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"}
-
-	// добавил NumPad для уровней 4 и 5
-	if numPadEnabled {
-		numPadKeys := []string{"Num1", "Num2", "Num3", "Num4", "Num5", "Num6", "Num7", "Num8", "Num9", "Num0"}
-		keys = append(keys, numPadKeys...)
-	}
-	return keys[rand.Intn(len(keys))]
+// Коды клавиш для цифр (верхний блок и NumPad)
+var keyCodes = map[int]string{
+	// Верхний блок цифр
+	18: "1", 19: "2", 20: "3", 21: "4", 23: "5", 22: "6", 26: "7", 28: "8", 25: "9", 29: "0",
+	// NumPad
+	83: "Num1", 84: "Num2", 85: "Num3", 86: "Num4", 87: "Num5", 88: "Num6", 89: "Num7", 91: "Num8", 92: "Num9", 82: "Num0",
 }
 
-// для подсветки клавиш
+// Функция выбора случайной клавиши в зависимости от уровня
+func getNextKey() string {
+	switch currentLevel {
+	case 1:
+		return "1" // Фиксированная клавиша для уровня 1
+	case 2:
+		// Случайная клавиша на верхней панели
+		keys := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"}
+		return keys[rand.Intn(len(keys))]
+	case 3:
+		return "Num1" // Фиксированная клавиша для уровня 3
+	case 4:
+		// Случайная клавиша на NumPad
+		keys := []string{"Num1", "Num2", "Num3", "Num4", "Num5", "Num6", "Num7", "Num8", "Num9", "Num0"}
+		return keys[rand.Intn(len(keys))]
+	case 5:
+		// Случайная клавиша на всех панелях
+		keys := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Num1", "Num2", "Num3", "Num4", "Num5", "Num6", "Num7", "Num8", "Num9", "Num0"}
+		return keys[rand.Intn(len(keys))]
+	default:
+		return "1" // По умолчанию
+	}
+}
+
+// Функция подсветки клавиши
 func highlightRandomKey(label *widget.Label, window fyne.Window) {
 	if !testRunning {
 		return
 	}
-	//убираем подсветку с предыдущей клавиши
+
+	// Убираем подсветку с предыдущей клавиши
 	if btn, exists := buttons[highlightedKey]; exists {
 		btn.Importance = widget.MediumImportance
 		btn.Refresh()
 	}
-	//выбираем новую клавишу
+
+	// Выбираем новую клавишу
 	highlightedKey = getNextKey()
 	if btn, exists := buttons[highlightedKey]; exists {
 		btn.Importance = widget.HighImportance
 		btn.Refresh()
 	}
-	//обновляем текст метки
+
+	// Обновляем текст метки
 	label.SetText("Нажмите: " + highlightedKey)
-	//фиксируем время начала реакции
+
+	// Фиксируем время начала реакции
 	startTime = time.Now()
-	//обновляем интерфейс
+
+	// Обновляем интерфейс
 	window.Canvas().Refresh(label)
 }
 
-// функция обработки нажатия клавиши (клавиатура + кнопки)
-func keyPressed(input string, label *widget.Label, window fyne.Window) {
-	if !testRunning || input != highlightedKey {
+func keyPressed(input string, label *widget.Label, window fyne.Window, content *fyne.Container) {
+
+	if !testRunning {
 		return
 	}
-	// фиксирую время реакции
+
+	if input != highlightedKey {
+		label.SetText(fmt.Sprintf("Ошибка: Вы нажали не ту клавишу. Ожидалось: %s", highlightedKey))
+		return
+	}
+
+	// Фиксируем время реакции
 	reactionTime := time.Since(startTime).Seconds()
 	results = append(results, reactionTime)
 	attempts++
-	// Проверяю завершение теста 10 нажатий
+
+	// Проверяем завершение теста
 	if attempts >= 10 {
 		testRunning = false
 		label.SetText("Тест завершен")
 		saveResults()
-		drawGraph()
-		window.Canvas().Refresh(label)
+
 		return
 	}
+
 	highlightRandomKey(label, window)
 }
 
-// функция для сейва результатов
+// Функция сохранения результатов
 func saveResults() {
 	file, err := os.OpenFile("reaction_results.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -108,7 +142,7 @@ func saveResults() {
 	}
 }
 
-// график
+// Функция рисования графика
 func drawGraph() {
 	p := plot.New()
 	p.Title.Text = "Время реакции"
@@ -132,13 +166,13 @@ func drawGraph() {
 		log.Fatal(err)
 	}
 
-	//обновляем изображение графика в GUI
+	// Обновляем изображение графика в GUI
 	graphImage.File = "reaction_graph.png"
-	graphImage.Resize(fyne.NewSize(400, 300))
+	graphImage.Resize(fyne.NewSize(450, 300))
 	graphImage.Refresh()
 }
 
-// для запуска теста
+// Функция запуска теста
 func startTest(label *widget.Label, window fyne.Window) {
 	testRunning = true
 	attempts = 0
@@ -146,14 +180,14 @@ func startTest(label *widget.Label, window fyne.Window) {
 	highlightRandomKey(label, window)
 }
 
-// функция смены уровня
+// Функция смены уровня
 func changeLevel(level int, label *widget.Label, numPadContainer *fyne.Container) {
 	currentLevel = level
 	testRunning = false
 	label.SetText("Выберите уровень и нажмите 'Старт'")
 
-	// Включаем NumPad только для уровней 4 и 5
-	numPadEnabled = (level == 4 || level == 5)
+	// Включаем NumPad только для уровней 3, 4 и 5
+	numPadEnabled = (level >= 3)
 	if numPadEnabled {
 		numPadContainer.Show()
 	} else {
@@ -165,17 +199,18 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	myApp := app.New()
 	myWindow := myApp.NewWindow("Тест скорости реакции")
-	myWindow.Resize(fyne.NewSize(800, 700))
+	myWindow.Resize(fyne.NewSize(900, 700))
 
-	//метка текущей клавиши
+	// Метка текущей клавиши
 	label := widget.NewLabel("Выберите уровень и нажмите 'Старт'")
 
-	//кнопки 0-9
+	// Кнопки 0-9
 	buttonGrid := container.NewGridWithColumns(10)
 	for _, num := range []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"} {
 		btn := widget.NewButton(num, func(n string) func() {
 			return func() {
-				keyPressed(n, label, myWindow)
+				keyPressed(n, label, myWindow, content)
+				drawGraph()
 			}
 		}(num))
 		buttons[num] = btn
@@ -187,7 +222,8 @@ func main() {
 	for _, num := range []string{"Num1", "Num2", "Num3", "Num4", "Num5", "Num6", "Num7", "Num8", "Num9", "Num0"} {
 		btn := widget.NewButton(num, func(n string) func() {
 			return func() {
-				keyPressed(n, label, myWindow)
+				keyPressed(n, label, myWindow, content)
+				drawGraph()
 			}
 		}(num))
 		buttons[num] = btn
@@ -195,7 +231,7 @@ func main() {
 	}
 	numPadContainer.Hide()
 
-	//кнопки уровней
+	// Кнопки уровней
 	levelButtons := container.NewHBox()
 	for i := 1; i <= 5; i++ {
 		lvl := i
@@ -204,17 +240,18 @@ func main() {
 		}))
 	}
 
-	//кнопка "Старт"
+	// Кнопка "Старт"
 	startButton := widget.NewButton("Старт", func() {
 		startTest(label, myWindow)
 	})
 
-	//поле для графика
+	// Поле для графика
 	graphImage = canvas.NewImageFromFile("reaction_graph.png")
-	graphImage.Resize(fyne.NewSize(400, 300))
+	graphImage.Resize(fyne.NewSize(450, 300))
+	graphImage.FillMode = canvas.ImageFillContain
 
-	//основной контейнер
-	content := container.NewVBox(
+	// Основной контейнер
+	content = container.NewVBox(
 		label,
 		startButton,
 		levelButtons,
@@ -225,29 +262,17 @@ func main() {
 
 	myWindow.SetContent(content)
 
+	// Обработка нажатий клавиш по их кодам
 	myWindow.Canvas().SetOnTypedKey(func(event *fyne.KeyEvent) {
-		key := string(event.Name)
+		keyCode := int(event.Physical.ScanCode)
+		fmt.Printf("Нажата клавиша с кодом: %d\n", keyCode) // Отладочное сообщение
 
-		// Возможные названия клавиш на разных системах
-		numPadMapping := map[string]string{
-			"KP_1": "Num1", "KP_2": "Num2", "KP_3": "Num3",
-			"KP_4": "Num4", "KP_5": "Num5", "KP_6": "Num6",
-			"KP_7": "Num7", "KP_8": "Num8", "KP_9": "Num9",
-			"KP_0": "Num0",
-
-			// Возможные альтернативные названия (зависит от ОС)
-			"KP_End": "Num1", "KP_Down": "Num2", "KP_Next": "Num3",
-			"KP_Left": "Num4", "KP_Begin": "Num5", "KP_Right": "Num6",
-			"KP_Home": "Num7", "KP_Up": "Num8", "KP_Prior": "Num9",
-			"KP_Insert": "Num0",
+		if key, exists := keyCodes[keyCode]; exists {
+			keyPressed(key, label, myWindow, content)
+		} else {
+			label.SetText(fmt.Sprintf("Ошибка: Клавиша с кодом %d не распознана", keyCode))
 		}
-
-		if mappedKey, exists := numPadMapping[key]; exists {
-			key = mappedKey
-		}
-
-		fmt.Println("Key pressed:", key) // Логирование для проверки
-		keyPressed(key, label, myWindow)
+		drawGraph()
 	})
 
 	myWindow.ShowAndRun()
